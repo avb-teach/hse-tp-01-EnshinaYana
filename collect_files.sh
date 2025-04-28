@@ -30,7 +30,7 @@ find "$input_dir" -type f -print0 | while IFS= read -r -d '' file; do
     if [ $count -eq 0 ]; then
         new_filename="$filename"
     else
-        if [[ "$filename" =~ ^(.*)\.([^.]*)$ ]]; then
+        if [[ "$filename" =~ ^(.*)\.([^.]+)$ ]]; then
             name="${BASH_REMATCH[1]}"
             ext="${BASH_REMATCH[2]}"
             new_filename="${name}_${count}.${ext}"
@@ -39,10 +39,8 @@ find "$input_dir" -type f -print0 | while IFS= read -r -d '' file; do
         fi
     fi
 
-    new_count=$((count + 1))
-    echo "$new_count" > "$count_file"
-
-    cp -- "$file" "$output_dir/$new_filename"
+    echo $((count + 1)) > "$count_file"
+    cp -- "$file" "$output_dir/$new_filename" || echo "Ошибка копирования: $file" >&2
 done
 
 rm -rf "$temp_dir"
