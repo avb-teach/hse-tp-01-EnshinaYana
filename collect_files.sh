@@ -40,7 +40,7 @@ copy_file() {
     local dst_dir="$2"
 
     local filename
-    filename=$(basename "$src_file")
+    filename=$(basename -- "$src_file")
     local base="${filename%.*}"
     local ext="${filename##*.}"
 
@@ -58,7 +58,7 @@ copy_file() {
         counter=$((counter + 1))
     done
 
-    cp "$src_file" "$target"
+    cp -- "$src_file" "$target"  # Исправлено: добавлен --
 }
 
 find_command=(find "$input_dir" -type f)
