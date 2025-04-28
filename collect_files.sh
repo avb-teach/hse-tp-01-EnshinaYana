@@ -1,58 +1,71 @@
 #!/bin/bash
 
-if [[ "$1" == "--max_depth" ]]; then
-    if (( $# != 4 )); then
-        echo "Использование: $0 --max_depth N входная_директория выходная_директория" >&2
+if [ "$1" = "--max_depth" ]; then
+    if [ $# -ne 4 ]; then
+        echo "Usage: $0 [--max_depth DEPTH] INPUT_DIR OUTPUT_DIR" >&2
         exit 1
     fi
     max_depth="$2"
     input_dir="$3"
     output_dir="$4"
 else
-    if (( $# != 2 )); then
-        echo "Использование: $0 [--max_depth N] входная_директория выходная_директория" >&2
+    if [ $# -ne 2 ]; then
+        echo "Usage: $0 [--max_depth DEPTH] INPUT_DIR OUTPUT_DIR" >&2
         exit 1
     fi
-    max_depth=100  # Достаточно большая глубина по умолчанию
+    max_depth=""
     input_dir="$1"
     output_dir="$2"
 fi
 
-if [[ ! -d "$input_dir" ]]; then
-    echo "Ошибка: входная директория '$input_dir' не существует" >&2
+if [ ! -d "$input_dir" ]; then
+    echo "Input directory does not exist: $input_dir" >&2
     exit 1
 fi
 
 mkdir -p "$output_dir" || {
-    echo "Ошибка: не удалось создать выходную директорию '$output_dir'" >&2
+    echo "Failed to create output directory: $output_dir" >&2
     exit 1
 }
 
-counter_file=$(mktemp) || {
-    echo "Ошибка: не удалось создать временный файл" >&2
-    exit 1
-}
-trap 'rm -f "$counter_file"' EXIT
+process_file() {
+    local file="$1"
+    local output_dir="$2"
 
-find "$input_dir" -type f -maxdepth "$max_depth" -print0 | while IFS= read -r -d '' file; do
+    local filename base ext new_ext candidate new_name
     filename=$(basename -- "$file")
+    base="${filename%.*}"
+    ext="${filename##*.}"
 
-    count=$(grep -c "^${filename}=" "$counter_file" 2>/dev/null || echo 0)
-
-    if (( count > 0 )); then
-        if [[ "$filename" =~ ^(.+)\.(.+)$ ]]; then
-            new_name="${BASH_REMATCH[1]}_${count}.${BASH_REMATCH[2]}"
-        else
-            new_name="${filename}_${count}"
-        fi
+    if [ "$base" = "$filename" ]; then
+        new_ext=""
     else
-        new_name="$filename"
+        new_ext=".$ext"
     fi
 
-    if ! cp -- "$file" "$output_dir/$new_name"; then
-        echo "Ошибка копирования: $file -> $output_dir/$new_name" >&2
-        continue
+    candidate="$output_dir/$filename"
+    if [ ! -e "$candidate" ]; then
+        cp -- "$file" "$candidate" || echo "Failed to copy $file" >&2
+    else
+        counter=1
+        while true; do
+            new_name="${base}_${counter}${new_ext}"
+            candidate="$output_dir/$new_name"
+            if [ ! -e "$candidate" ]; then
+                cp -- "$file" "$candidate" || echo "Failed to copy $file" >&2
+                break
+            fi
+            counter=$((counter + 1))
+        done
     fi
+}
 
-    echo "${filename}=$((count + 1))" >> "$counter_file"
+find_args=("$input_dir")
+if [ -n "$max_depth" ]; then
+    find_args+=(-maxdepth "$max_depth")
+fi
+find_args+=(-type f)
+
+find "${find_args[@]}" -print0 | while IFS= read -r -d '' file; do
+    process_file "$file" "$output_dir"
 done
